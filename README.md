@@ -27,7 +27,42 @@ What stays digital: attention scores (two activations multiplied together), embe
 
 ## One thing it shows right away
 
-Real models have a few huge activation values. Scaling each input vector to its largest value and quantizing it crushes the ordinary values: GPT-2 at 6 input bits goes from perplexity 47 to over 3,000 with no noise at all, while 10 bits keeps it near 52. Input precision and how the engine handles loud values matter as much as the light budget.
+Real models have a few huge activation values. Scaling each input vector to its largest value and quantizing it crushes the ordinary values: GPT-2 at `in_bits=6` (6 fractional input bits, 129 signed levels) goes from perplexity 47 to over 3,000 with no noise at all, while `in_bits=10` (2,049 signed levels) keeps it near 52. Input precision and how the engine handles loud values matter as much as the light budget.
+
+## Quantization conventions and benchmark compatibility
+
+The engine's historical settings describe grid resolution, **not total signed
+hardware bit widths**. For normalized values in [-1, 1]:
+
+| Engine setting | Grid before physical errors | Signed levels (including endpoints) |
+| --- | --- | --- |
+| `in_bits=B` | `round(x * 2**B) / 2**B` | `2**(B+1) + 1`; B=6: 129; B=10: 2,049 |
+| `weight_levels=L` | `round(w * (L-1)) / (L-1)` | `2*L - 1`; default L=256: 511 |
+| `adc_bits=A` | step `2*full / 2**A`, centered at zero | `2**A + 1` with clipping; default A=12: 4,097 |
+
+Inputs scale per vector and weights per row, with a minimum scale of `1e-12`.
+Rounding uses PyTorch's round-to-nearest, ties-to-even rule. Weight level counts
+apply before the always-present calibration residual and optional phase drift;
+those errors move weights off the grid. The `digital` engine bypasses all these quantizers. The engine ADC runs only
+when `e` is set. With `clip=False` its output is not restricted to a finite range. The
+separate `lumen.hardware.adc` uses a conventional `2**bits` total-level grid;
+these two converter implementations have different conventions.
+
+Use `python -m lumen llm --input-fractional-bits 6` for explicit CLI terminology.
+`--in-bits 6` remains an equivalent alias. The CLI defaults to 10 fractional
+input bits; the Python `Engine` defaults to `in_bits=6`. Python configuration
+keys and result JSON (`in_bits`, `weight_levels`, `adc_bits`), defaults, random
+number draws, and numerical equations remain unchanged to preserve old runs.
+
+The GPT-2 figures above are historical reported results under these legacy
+grids, not new measurements or benchmarks of conventional 6-bit/10-bit signed
+hardware. Encoding 129 or 2,049 distinct values requires at least 8 or 12 total
+binary bits respectively; 511 weight levels require at least 9. These counts
+exclude scale storage and do not specify an optical hardware encoding. A future
+change to conventional total-bit quantization would require rerunning both
+GPT-2 precision claims; the published perplexities must not be transferred to
+that different quantizer. This clarification does not independently validate
+the perplexity results or the Wang 2022 physics model.
 
 ## License
 

@@ -17,7 +17,8 @@ def main(argv=None):
     ap.add_argument("--kind", default="incoherent", choices=["incoherent", "coherent", "digital"])
     ap.add_argument("--light", type=float, default=None,
                     help="photo-electrons (incoherent) or photons (coherent) per full-scale multiply-add; omit for no noise")
-    ap.add_argument("--in-bits", type=int, default=10, help="input precision; real models have a few huge activations, so few bits crush the rest")
+    ap.add_argument("--input-fractional-bits", "--in-bits", dest="in_bits", type=int, default=10,
+                    help="fractional input bits B on [-1, 1]: 2**(B+1)+1 signed levels, not total hardware bits; default 10; --in-bits is the legacy alias")
     ap.add_argument("--windows", type=int, default=8)
     ap.add_argument("--ctx", type=int, default=512)
     a = ap.parse_args(argv)
