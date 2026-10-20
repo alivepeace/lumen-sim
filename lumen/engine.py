@@ -9,8 +9,10 @@ fixed weight. Embedding lookups, layer norms, softmax and activation functions a
 
 The engine, per matrix W [out, in]:
   weights    each row stored scaled to its own maximum (corrected digitally after reading),
-             `weight_levels` levels, plus a small per-cell calibration residual
-  inputs     each token's vector scaled to its maximum and quantized to `in_bits`
+             `weight_levels` nonnegative levels (2 * weight_levels - 1 signed levels),
+             plus a small per-cell calibration residual
+  inputs     each token's vector scaled to its maximum and quantized with `in_bits`
+             fractional bits (sign and endpoints extra)
   incoherent intensity-encoded light is never negative, so signed weights use + and - rows and
              signed inputs take two passes. Shot noise follows ALL the light that lands, not the
              answer: var = e * sum_j |x_j| |w_ij|, e = photo-electrons per full-scale multiply-add,
@@ -33,7 +35,16 @@ class Engine:
     def __init__(self, kind="incoherent", e=None, in_bits=6, weight_levels=256, adc_bits=12,
                  gain_drift=0.005, phase_drift=0.0, read_e=60.0, headroom=4.0, clip=True, seed=0):
         """kind: incoherent | coherent | digital. e: photo-electrons (incoherent) or detected photons
-        (coherent) per full-scale multiply-add; None = no shot or read noise."""
+        (coherent) per full-scale multiply-add; None = no shot or read noise.
+
+        Legacy configuration names are retained for benchmark reproducibility:
+        in_bits counts fractional bits on [-1, 1], giving 2**(in_bits + 1) + 1
+        signed levels, not total storage bits. weight_levels includes zero and
+        +1 on the nonnegative grid; mirroring gives 2 * weight_levels - 1 levels
+        before calibration residual and phase drift. adc_bits sets the number
+        of intervals across the bipolar range, giving 2**adc_bits + 1 levels
+        with clipping (not a conventional total-bit ADC). e=None bypasses ADC.
+        """
         self.kind, self.e, self.in_bits, self.weight_levels = kind, e, in_bits, weight_levels
         self.levels = 2 ** adc_bits
         self.gain_drift, self.phase_drift, self.read_e = gain_drift, phase_drift, read_e
